@@ -1,0 +1,548 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2FA Authenticator - Generate And Copy Two-Factor Authentication Codes</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/jssha@3.2.0/dist/sha.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        .timer-circle {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            position: relative;
+        }
+        .timer-circle-inner {
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            background-color: white;
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+        }
+        .timer-circle svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 60px;
+            height: 60px;
+            transform: rotate(-90deg);
+        }
+        .timer-circle svg circle {
+            stroke-dasharray: 188.5;
+            stroke-dashoffset: 0;
+            stroke-linecap: round;
+            stroke-width: 3px;
+            stroke: #4F46E5;
+            fill: none;
+            animation: countdown 30s linear infinite;
+        }
+        @keyframes countdown {
+            from {
+                stroke-dashoffset: 0;
+            }
+            to {
+                stroke-dashoffset: 188.5;
+            }
+        }
+        .code-digit {
+            font-family: monospace;
+            width: 2.5rem;
+            height: 3.5rem;
+            font-size: 2rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            margin: 0 0.25rem;
+            text-align: center;
+            background-color: white;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        }
+        .hero-bg {
+            background: linear-gradient(135deg, #4F46E5 0%, #7e3af2 100%);
+        }
+        .copy-notification {
+            position: absolute;
+            top: 0;
+            right: 0;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .copy-notification.show {
+            opacity: 1;
+        }
+        .code-display {
+            position: relative;
+            cursor: pointer;
+        }
+        .code-display:hover {
+            background-color: #f9fafb;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center">
+                    <div class="text-2xl font-bold text-indigo-600">
+                        <i class="fas fa-shield-alt mr-2"></i>
+                        2FA Authenticator
+                    </div>
+                </div>
+                <nav class="hidden md:flex space-x-8">
+                    <a href="#" class="text-gray-700 hover:text-indigo-600 font-medium">Home</a>
+                    <a href="#about" class="text-gray-700 hover:text-indigo-600 font-medium">About</a>
+                    <a href="#how-it-works" class="text-gray-700 hover:text-indigo-600 font-medium">How It Works</a>
+                    <a href="#blog" class="text-gray-700 hover:text-indigo-600 font-medium">Blog</a>
+                </nav>
+                <div class="md:hidden">
+                    <button class="text-gray-700 hover:text-indigo-600">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero-bg text-white py-16">
+        <div class="container mx-auto px-4 text-center">
+            <h1 class="text-4xl md:text-5xl font-bold mb-6">Two-Factor Authentication Code Generator</h1>
+            <p class="text-xl max-w-3xl mx-auto mb-8">Generate secure 2FA codes instantly to enhance your account security. No setup required, just enter your secret key and get your code.</p>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-12">
+        <!-- 2FA Tool Section -->
+        <section class="mb-16">
+            <div class="max-w-3xl mx-auto bg-white rounded-lg shadow-md p-6 md:p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Generate Your 2FA Code</h2>
+                
+                <div class="mb-8">
+                    <label for="secret" class="block text-gray-700 font-medium mb-2">Enter Your 2FA Secret Key</label>
+                    <div class="flex">
+                        <input type="text" id="secret" class="flex-1 border border-gray-300 rounded-l-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g., JBSWY3DPEHPK3PXP">
+                        <button id="generate-btn" class="bg-indigo-600 text-white px-6 py-3 rounded-r-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                            Get Code
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-2">* Please store your 2FA secret safely. Never share it with anyone.</p>
+                </div>
+                
+                <div id="code-container" class="hidden">
+                    <div class="flex flex-col items-center justify-center mb-8">
+                        <div id="code-display" class="code-display flex justify-center mb-4 relative rounded-lg p-2 transition-all">
+                            <div class="code-digit" id="digit-1">0</div>
+                            <div class="code-digit" id="digit-2">0</div>
+                            <div class="code-digit" id="digit-3">0</div>
+                            <div class="code-digit" id="digit-4">0</div>
+                            <div class="code-digit" id="digit-5">0</div>
+                            <div class="code-digit" id="digit-6">0</div>
+                            <div class="copy-notification bg-green-100 text-green-800 px-2 py-1 rounded text-sm absolute -top-8 right-0" id="copy-notification">
+                                <i class="fas fa-check mr-1"></i> Code copied!
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="timer-circle mr-3">
+                                <svg>
+                                    <circle cx="30" cy="30" r="28"></circle>
+                                </svg>
+                                <div class="timer-circle-inner">
+                                    <span id="timer-count">30</span>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="text-gray-700">Code refreshes in <span id="timer-text">30</span> seconds</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <div class="flex items-start">
+                            <div class="text-indigo-600 mr-3 mt-1">
+                                <i class="fas fa-info-circle text-xl"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-medium text-gray-800">Important Information</h4>
+                                <p class="text-gray-600 text-sm mt-1">This code changes every 30 seconds. Enter it quickly when prompted by your service provider for 2FA authentication. Click on the code to copy it to clipboard.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How to Use Section -->
+        <section id="how-it-works" class="mb-16">
+            <div class="max-w-4xl mx-auto">
+                <h2 class="text-3xl font-bold text-center mb-10">How To Use 2FA Authenticator</h2>
+                
+                <div class="grid md:grid-cols-3 gap-8">
+                    <div class="bg-white rounded-lg shadow-md p-6 text-center">
+                        <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 mx-auto mb-4">
+                            <i class="fas fa-key text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-bold mb-2">Step 1: Enter Secret</h3>
+                        <p class="text-gray-600">Enter your 2FA secret key in the input field above. This is usually provided when you set up 2FA on a service.</p>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow-md p-6 text-center">
+                        <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 mx-auto mb-4">
+                            <i class="fas fa-calculator text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-bold mb-2">Step 2: Generate Code</h3>
+                        <p class="text-gray-600">Click the "Get Code" button to generate your temporary 6-digit 2FA code based on your secret key. The code will be automatically copied to your clipboard.</p>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow-md p-6 text-center">
+                        <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 mx-auto mb-4">
+                            <i class="fas fa-lock text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-bold mb-2">Step 3: Use The Code</h3>
+                        <p class="text-gray-600">Paste the copied 6-digit code when prompted by the service you're signing into to complete the authentication.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- About 2FA Section -->
+        <section id="about" class="mb-16">
+            <div class="max-w-4xl mx-auto">
+                <h2 class="text-3xl font-bold text-center mb-10">What is Two-Factor Authentication?</h2>
+                
+                <div class="bg-white rounded-lg shadow-md p-8">
+                    <p class="text-gray-700 mb-4">Two-Factor Authentication (2FA) is a security method that requires two different forms of identification to access an account. This adds an extra layer of protection beyond just a password.</p>
+                    
+                    <p class="text-gray-700 mb-4">When you enable 2FA on an account, you'll need:</p>
+                    
+                    <ul class="list-disc list-inside text-gray-700 mb-4 ml-4">
+                        <li class="mb-2"><strong>Something you know</strong> - Your password</li>
+                        <li class="mb-2"><strong>Something you have</strong> - A device that generates or receives authentication codes</li>
+                    </ul>
+                    
+                    <p class="text-gray-700 mb-4">Even if someone discovers your password, they cannot access your account without the second factor - the temporary code generated using your secret key.</p>
+                    
+                    <h3 class="text-xl font-bold mb-3 mt-6">Why Use 2FA?</h3>
+                    <ul class="list-disc list-inside text-gray-700 mb-4 ml-4">
+                        <li class="mb-2">Significantly increases account security</li>
+                        <li class="mb-2">Protects against password breaches and phishing attacks</li>
+                        <li class="mb-2">Provides early warning of unauthorized access attempts</li>
+                        <li class="mb-2">Required by many services for enhanced security</li>
+                    </ul>
+                    
+                    <div class="bg-indigo-50 border-l-4 border-indigo-600 p-4 mt-6">
+                        <p class="text-indigo-900">This online 2FA code generator tool provides a convenient way to generate authentication codes when you don't have access to your usual authentication app.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Blog Section -->
+        <section id="blog" class="mb-16">
+            <div class="max-w-5xl mx-auto">
+                <h2 class="text-3xl font-bold text-center mb-10">Security Blog</h2>
+                
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                        <div class="h-48 bg-indigo-100 flex items-center justify-center">
+                            <i class="fas fa-shield-alt text-6xl text-indigo-300"></i>
+                        </div>
+                        <div class="p-6">
+                            <h3 class="text-xl font-bold mb-2">Step-by-Step Guide to Setting Up 2FA</h3>
+                            <p class="text-gray-600 mb-4">Forget passwords. If you want strong online security, you need to understand how to set up and use 2FA across all your important accounts.</p>
+                            <a href="#" class="text-indigo-600 font-medium hover:text-indigo-800">Read More →</a>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                        <div class="h-48 bg-indigo-100 flex items-center justify-center">
+                            <i class="fab fa-facebook text-6xl text-indigo-300"></i>
+                        </div>
+                        <div class="p-6">
+                            <h3 class="text-xl font-bold mb-2">How Two-Factor Authentication Works on Facebook</h3>
+                            <p class="text-gray-600 mb-4">Two-factor authentication is a security feature that helps protect your Facebook account from unauthorized access even if someone has your password.</p>
+                            <a href="#" class="text-indigo-600 font-medium hover:text-indigo-800">Read More →</a>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                        <div class="h-48 bg-indigo-100 flex items-center justify-center">
+                            <i class="fas fa-key text-6xl text-indigo-300"></i>
+                        </div>
+                        <div class="p-6">
+                            <h3 class="text-xl font-bold mb-2">The Different Types of Two-Factor Authentication</h3>
+                            <p class="text-gray-600 mb-4">Compare the security and convenience of SMS codes, authenticator apps, hardware keys, and biometric authentication methods.</p>
+                            <a href="#" class="text-indigo-600 font-medium hover:text-indigo-800">Read More →</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-12">
+        <div class="container mx-auto px-4">
+            <div class="max-w-6xl mx-auto">
+                <div class="flex flex-col md:flex-row justify-between">
+                    <div class="mb-8 md:mb-0">
+                        <h3 class="text-xl font-bold mb-4">2FA Authenticator</h3>
+                        <p class="text-gray-300 max-w-xs">A reliable tool to quickly and conveniently generate two-factor authentication codes for enhanced security.</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-8">
+                        <div>
+                            <h4 class="text-lg font-semibold mb-4">Links</h4>
+                            <ul class="space-y-2">
+                                <li><a href="#" class="text-gray-300 hover:text-white">Home</a></li>
+                                <li><a href="#about" class="text-gray-300 hover:text-white">About</a></li>
+                                <li><a href="#how-it-works" class="text-gray-300 hover:text-white">How It Works</a></li>
+                                <li><a href="#blog" class="text-gray-300 hover:text-white">Blog</a></li>
+                            </ul>
+                        </div>
+                        
+                        <div>
+                            <h4 class="text-lg font-semibold mb-4">Resources</h4>
+                            <ul class="space-y-2">
+                                <li><a href="#" class="text-gray-300 hover:text-white">Privacy Policy</a></li>
+                                <li><a href="#" class="text-gray-300 hover:text-white">Terms of Service</a></li>
+                                <li><a href="#" class="text-gray-300 hover:text-white">FAQ</a></li>
+                                <li><a href="#" class="text-gray-300 hover:text-white">Contact</a></li>
+                            </ul>
+                        </div>
+                        
+                        <div class="col-span-2 md:col-span-1">
+                            <h4 class="text-lg font-semibold mb-4">Follow Us</h4>
+                            <div class="flex space-x-4">
+                                <a href="#" class="text-gray-300 hover:text-white text-xl"><i class="fab fa-twitter"></i></a>
+                                <a href="#" class="text-gray-300 hover:text-white text-xl"><i class="fab fa-facebook"></i></a>
+                                <a href="#" class="text-gray-300 hover:text-white text-xl"><i class="fab fa-github"></i></a>
+                                <a href="#" class="text-gray-300 hover:text-white text-xl"><i class="fab fa-linkedin"></i></a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="border-t border-gray-700 mt-12 pt-8 text-center">
+                    <p class="text-gray-400">&copy; 2023 2FA Authenticator. All rights reserved.</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript for 2FA code generation -->
+    <script>
+        // Base32 decoding function
+        function base32ToHex(base32) {
+            const base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+            let bits = '';
+            let hex = '';
+
+            for (let i = 0; i < base32.length; i++) {
+                const val = base32chars.indexOf(base32.charAt(i).toUpperCase());
+                if (val >= 0 && val < 32) {
+                    bits += val.toString(2).padStart(5, '0');
+                }
+            }
+
+            for (let i = 0; i + 4 <= bits.length; i += 4) {
+                const chunk = bits.substr(i, 4);
+                hex += parseInt(chunk, 2).toString(16);
+            }
+
+            return hex;
+        }
+
+        // Function to generate TOTP (Time-based One-Time Password)
+        function generateTOTP(secret, period = 30) {
+            try {
+                // Clean the secret key (remove spaces and dashes)
+                secret = secret.replace(/\s+/g, '').replace(/-/g, '').toUpperCase();
+                
+                // Convert the secret from base32 to hex
+                const secretHex = base32ToHex(secret);
+                
+                // Get the current time and calculate the counter value
+                const counter = Math.floor(Date.now() / 1000 / period);
+                const counterHex = counter.toString(16).padStart(16, '0');
+                
+                // Create a new SHA-1 object
+                const shaObj = new jsSHA("SHA-1", "HEX");
+                
+                // Set the HMAC key and input
+                shaObj.setHMACKey(secretHex, "HEX");
+                shaObj.update(counterHex);
+                
+                // Get the HMAC value
+                const hmac = shaObj.getHMAC("HEX");
+                
+                // Get the offset
+                const offset = parseInt(hmac.substring(hmac.length - 1), 16);
+                
+                // Get the four bytes at the specified offset
+                const otp = (parseInt(hmac.substr(offset * 2, 8), 16) & 0x7fffffff) % 1000000;
+                
+                // Pad the OTP with leading zeros if necessary
+                return otp.toString().padStart(6, '0');
+            } catch (e) {
+                console.error("Error generating TOTP:", e);
+                return "000000";
+            }
+        }
+
+        // Function to copy text to clipboard
+        function copyToClipboard(text) {
+            // Create a temporary textarea element
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            
+            // Make it invisible
+            textarea.style.position = 'absolute';
+            textarea.style.left = '-9999px';
+            
+            // Add it to the document
+            document.body.appendChild(textarea);
+            
+            // Select the text and copy
+            textarea.select();
+            document.execCommand('copy');
+            
+            // Remove the textarea
+            document.body.removeChild(textarea);
+            
+            // Show notification
+            const notification = document.getElementById('copy-notification');
+            notification.classList.add('show');
+            
+            // Hide notification after 2 seconds
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 2000);
+        }
+
+        // Get references to DOM elements
+        const secretInput = document.getElementById('secret');
+        const generateBtn = document.getElementById('generate-btn');
+        const codeContainer = document.getElementById('code-container');
+        const timerCount = document.getElementById('timer-count');
+        const timerText = document.getElementById('timer-text');
+        const codeDisplay = document.getElementById('code-display');
+        
+        // Digit elements
+        const digits = [
+            document.getElementById('digit-1'),
+            document.getElementById('digit-2'),
+            document.getElementById('digit-3'),
+            document.getElementById('digit-4'),
+            document.getElementById('digit-5'),
+            document.getElementById('digit-6')
+        ];
+        
+        // Timer and code generation variables
+        let timerInterval = null;
+        let secondsRemaining = 30;
+        let currentSecret = '';
+        let currentCode = '';
+        
+        // Function to update the code display
+        function updateCodeDisplay(code) {
+            for (let i = 0; i < 6; i++) {
+                digits[i].textContent = code.charAt(i);
+            }
+            currentCode = code;
+        }
+        
+        // Function to start/reset the timer
+        function startTimer() {
+            // Clear any existing timer
+            clearInterval(timerInterval);
+            
+            // Reset timer values
+            secondsRemaining = 30;
+            timerCount.textContent = secondsRemaining;
+            timerText.textContent = secondsRemaining;
+            
+            // Reset animation
+            const circle = document.querySelector('.timer-circle svg circle');
+            circle.style.animation = 'none';
+            void circle.offsetWidth; // Force reflow
+            circle.style.animation = 'countdown 30s linear infinite';
+            
+            // Start new timer
+            timerInterval = setInterval(() => {
+                secondsRemaining--;
+                timerCount.textContent = secondsRemaining;
+                timerText.textContent = secondsRemaining;
+                
+                if (secondsRemaining <= 0) {
+                    // Reset timer and generate new code
+                    secondsRemaining = 30;
+                    if (currentSecret) {
+                        const newCode = generateTOTP(currentSecret);
+                        updateCodeDisplay(newCode);
+                    }
+                }
+            }, 1000);
+        }
+        
+        // Event listener for the generate button
+        generateBtn.addEventListener('click', () => {
+            const secret = secretInput.value.trim();
+            
+            if (!secret) {
+                alert('Please enter a 2FA secret key');
+                return;
+            }
+            
+            try {
+                // Generate the TOTP code
+                const code = generateTOTP(secret);
+                currentSecret = secret;
+                
+                // Display the code
+                updateCodeDisplay(code);
+                
+                // Show the code container
+                codeContainer.classList.remove('hidden');
+                
+                // Start the timer
+                startTimer();
+                
+                // Copy the code to clipboard
+                copyToClipboard(code);
+            } catch (error) {
+                alert('Error generating code. Please check your secret key and try again.');
+                console.error(error);
+            }
+        });
+        
+        // Event listener for clicking on the code to copy it
+        codeDisplay.addEventListener('click', () => {
+            if (currentCode) {
+                copyToClipboard(currentCode);
+            }
+        });
+        
+        // Handle Enter key press in the input field
+        secretInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                generateBtn.click();
+            }
+        });
+    </script>
+</body>
+</html>
